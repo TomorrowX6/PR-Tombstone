@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import "./style.css";
+import "./image2.css";
 
 const queryClient = new QueryClient();
 
