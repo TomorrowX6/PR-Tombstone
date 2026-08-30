@@ -21,7 +21,8 @@ func (s *Store) UpsertDashboardUser(ctx context.Context, githubID int64, login, 
 	return user, err
 }
 
-// ReplaceUserInstallations atomically refreshes the user's ACL snapshot.
+// ReplaceUserInstallations atomically refreshes the user's ACL snapshot and
+// only advances acl_refreshed_at after the replacement succeeds.
 func (s *Store) ReplaceUserInstallations(ctx context.Context, userID int64, installationIDs []int64) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -36,21 +37,25 @@ func (s *Store) ReplaceUserInstallations(ctx context.Context, userID int64, inst
 			return err
 		}
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE dashboard_users SET acl_refreshed_at=NOW() WHERE id=$1`, userID); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
 var ErrACLSnapshotExpired = errors.New("GitHub installation ACL snapshot expired")
 
 // UserInstallations returns the GitHub installation IDs the user may access.
-// The snapshot is accepted only for maxAge after the user's last OAuth login.
-// This bounds authorization-revocation delay without persisting the GitHub user
-// token: once stale, the caller must sign in again to refresh GET /user/installations.
+// The snapshot is accepted only for maxAge after a successful transactional
+// refresh. This bounds authorization-revocation delay without persisting the
+// GitHub user token: once stale, the caller must sign in again to refresh
+// GET /user/installations.
 func (s *Store) UserInstallations(ctx context.Context, userID int64, maxAge time.Duration) ([]int64, error) {
-	var refreshedAt time.Time
-	if err := s.DB.QueryRowContext(ctx, `SELECT last_login_at FROM dashboard_users WHERE id=$1`, userID).Scan(&refreshedAt); err != nil {
+	var refreshedAt sql.NullTime
+	if err := s.DB.QueryRowContext(ctx, `SELECT acl_refreshed_at FROM dashboard_users WHERE id=$1`, userID).Scan(&refreshedAt); err != nil {
 		return nil, err
 	}
-	if maxAge > 0 && time.Since(refreshedAt) > maxAge {
+	if !refreshedAt.Valid || (maxAge > 0 && time.Since(refreshedAt.Time) > maxAge) {
 		return nil, ErrACLSnapshotExpired
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT installation_github_id FROM user_installations WHERE user_id=$1`, userID)
