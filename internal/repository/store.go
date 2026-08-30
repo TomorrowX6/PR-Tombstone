@@ -688,7 +688,11 @@ func (s *Store) SaveSimilarityMatches(ctx context.Context, repoID int64, newPRNu
 		return err
 	}
 	for _, match := range matches {
-		if _, err := s.DB.ExecContext(ctx, `INSERT INTO similarity_matches (repository_id,new_pr_number,old_pr_number,score,relationship,reason) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (repository_id,new_pr_number,old_pr_number) DO UPDATE SET score=EXCLUDED.score,relationship=EXCLUDED.relationship,reason=EXCLUDED.reason,created_at=NOW()`, repoID, match.NewPRNumber, match.OldPRNumber, match.Score, match.Relationship, match.Reason); err != nil {
+		components, err := json.Marshal(match.Components)
+		if err != nil {
+			return err
+		}
+		if _, err := s.DB.ExecContext(ctx, `INSERT INTO similarity_matches (repository_id,new_pr_number,old_pr_number,score,relationship,reason,components) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (repository_id,new_pr_number,old_pr_number) DO UPDATE SET score=EXCLUDED.score,relationship=EXCLUDED.relationship,reason=EXCLUDED.reason,components=EXCLUDED.components,created_at=NOW()`, repoID, match.NewPRNumber, match.OldPRNumber, match.Score, match.Relationship, match.Reason, components); err != nil {
 			return err
 		}
 	}
@@ -822,7 +826,7 @@ func graphLabel(nodeType, key string) string {
 }
 
 func (s *Store) ListSimilarityMatches(ctx context.Context, repoID int64, newPRNumber int) ([]model.SimilarityMatch, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,new_pr_number,old_pr_number,score,relationship,reason FROM similarity_matches WHERE repository_id=$1 AND new_pr_number=$2 ORDER BY score DESC`, repoID, newPRNumber)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id,new_pr_number,old_pr_number,score,relationship,reason,components FROM similarity_matches WHERE repository_id=$1 AND new_pr_number=$2 ORDER BY score DESC`, repoID, newPRNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -830,7 +834,11 @@ func (s *Store) ListSimilarityMatches(ctx context.Context, repoID int64, newPRNu
 	var out []model.SimilarityMatch
 	for rows.Next() {
 		var item model.SimilarityMatch
-		if err := rows.Scan(&item.ID, &item.NewPRNumber, &item.OldPRNumber, &item.Score, &item.Relationship, &item.Reason); err != nil {
+		var components []byte
+		if err := rows.Scan(&item.ID, &item.NewPRNumber, &item.OldPRNumber, &item.Score, &item.Relationship, &item.Reason, &components); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(components, &item.Components); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

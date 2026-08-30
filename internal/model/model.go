@@ -151,13 +151,29 @@ type AnalysisInput struct {
 	Evidence []EvidenceItem      `json:"evidence"`
 }
 
+// ScoreComponents exposes every individual similarity signal that fed into a
+// SimilarityMatch.Score. Scores are 0..1. Semantic is nil when no embedding-
+// backed score was available for the pair, in which case the headline slot
+// of the weighted total fell back to the lexical TitleBody value and Reason
+// must say so explicitly.
+type ScoreComponents struct {
+	Semantic  *float64 `json:"semantic"`
+	TitleBody float64  `json:"title_body"`
+	Files     float64  `json:"files"`
+	Paths     float64  `json:"paths"`
+	Approach  float64  `json:"approach"`
+	Labels    float64  `json:"labels"`
+	Symbols   float64  `json:"symbols"`
+}
+
 type SimilarityMatch struct {
-	ID           int64   `json:"id"`
-	NewPRNumber  int     `json:"new_pr_number"`
-	OldPRNumber  int     `json:"old_pr_number"`
-	Score        float64 `json:"score"`
-	Relationship string  `json:"relationship"`
-	Reason       string  `json:"reason"`
+	ID           int64           `json:"id"`
+	NewPRNumber  int             `json:"new_pr_number"`
+	OldPRNumber  int             `json:"old_pr_number"`
+	Score        float64         `json:"score"`
+	Relationship string          `json:"relationship"`
+	Reason       string          `json:"reason"`
+	Components   ScoreComponents `json:"components"`
 }
 
 type PullRequestHistory struct {
