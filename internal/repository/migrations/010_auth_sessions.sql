@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS dashboard_users (
     name TEXT NOT NULL DEFAULT '',
     avatar_url TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    acl_refreshed_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS dashboard_sessions (
@@ -23,8 +24,9 @@ CREATE INDEX IF NOT EXISTS dashboard_sessions_expiry_idx ON dashboard_sessions (
 
 -- Snapshot of the GitHub App installations a user could access at login time,
 -- resolved through GET /user/installations with the user's OAuth token. The
--- OAuth token itself is deliberately never persisted; the snapshot refreshes
--- on every login, so access changes propagate on re-login.
+-- OAuth token itself is deliberately never persisted. acl_refreshed_at is
+-- updated in the same transaction that replaces these rows, so a failed ACL
+-- refresh can never make stale permissions look fresh.
 CREATE TABLE IF NOT EXISTS user_installations (
     user_id BIGINT NOT NULL REFERENCES dashboard_users(id) ON DELETE CASCADE,
     installation_github_id BIGINT NOT NULL,
