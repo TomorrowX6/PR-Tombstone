@@ -211,3 +211,14 @@ type Installation struct {
 	SuspendedAt  *time.Time `json:"suspended_at,omitempty"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 }
+
+// DashboardUser is a dashboard account created via GitHub OAuth login. The
+// GitHub numeric ID is the stable identity; login/name/avatar are display
+// metadata refreshed on every login.
+type DashboardUser struct {
+	ID        int64  `json:"id"`
+	GitHubID  int64  `json:"github_id"`
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+}

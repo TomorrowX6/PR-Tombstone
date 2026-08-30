@@ -27,6 +27,8 @@ type Graph = { nodes: { id: string; type: string; label: string }[]; edges: { id
 type History = { number: number; title: string; author: string; matches: Match[] };
 type JobStats = { pending: number; running: number; completed: number; failed: number };
 type Tab = "tombstones" | "history" | "graph" | "settings";
+type AuthUser = { id: number; github_id: number; login: string; name: string; avatar_url: string };
+type AuthStatus = { mode: "oauth" | "token" | "open"; user: AuthUser | null };
 
 function authHeaders(token: string, json = false): HeadersInit {
   const headers: Record<string, string> = {};
@@ -43,15 +45,23 @@ async function apiJSON<T>(url: string, token: string, init: RequestInit = {}): P
 
 export default function App() {
   const queryClient = useQueryClient();
-  const [token, setToken] = useState(() => localStorage.getItem("pr_tombstone_token") || "");
-  const [tokenDraft, setTokenDraft] = useState(token);
+  const [token, setToken] = useState("");
+  const [tokenDraft, setTokenDraft] = useState("");
   const [activeRepoID, setActiveRepoID] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [listLimit, setListLimit] = useState(100);
   const [tab, setTab] = useState<Tab>("tombstones");
 
-  const repos = useQuery({ queryKey: ["repositories", token], queryFn: () => apiJSON<{ repositories: Repo[] }>("/api/repositories", token) });
+  // Server-side sessions (GitHub OAuth) travel as an HttpOnly cookie; the
+  // legacy DASHBOARD_TOKEN bearer stays an in-memory fallback for self-host
+  // deployments and is never persisted to browser storage.
+  const auth = useQuery({ queryKey: ["auth"], queryFn: () => apiJSON<AuthStatus>("/api/auth/me", ""), retry: false, refetchOnWindowFocus: true });
+  const authMode = auth.data?.mode;
+  const authed = auth.data ? (auth.data.mode === "oauth" ? !!auth.data.user : auth.data.mode === "token" ? !!token : true) : false;
+  const logout = useMutation({ mutationFn: () => apiJSON<{ ok: boolean }>("/api/auth/logout", "", { method: "POST" }), onSuccess: () => { setActiveRepoID(null); setSelected(null); queryClient.invalidateQueries({ queryKey: ["auth"] }); } });
+
+  const repos = useQuery({ queryKey: ["repositories", token], queryFn: () => apiJSON<{ repositories: Repo[] }>("/api/repositories", token), enabled: authed });
   useEffect(() => {
     const available = repos.data?.repositories || [];
     if (available.length && !available.some((repo) => repo.id === activeRepoID)) setActiveRepoID(available[0].id);
@@ -67,7 +77,7 @@ export default function App() {
   const graph = useQuery({ queryKey: ["graph", activeRepo?.id, token], enabled: !!activeRepo && tab === "graph", queryFn: () => apiJSON<Graph>(`/api/graph/repository/${activeRepo!.id}`, token) });
   const history = useQuery({ queryKey: ["history", activeRepo?.id, token], enabled: !!activeRepo && tab === "history", queryFn: () => apiJSON<{ pull_requests: History[] }>(`/api/repositories/${activeRepo!.id}/history`, token) });
   const settings = useQuery({ queryKey: ["settings", activeRepo?.id, token], enabled: !!activeRepo && tab === "settings", queryFn: () => apiJSON<Settings>(`/api/repositories/${activeRepo!.id}/settings`, token) });
-  const jobs = useQuery({ queryKey: ["jobs", token], queryFn: () => apiJSON<JobStats>("/api/jobs", token), refetchInterval: 5000, retry: false });
+  const jobs = useQuery({ queryKey: ["jobs", token], queryFn: () => apiJSON<JobStats>("/api/jobs", token), refetchInterval: 5000, retry: false, enabled: authed });
 
   const reanalyze = useMutation({
     mutationFn: (id: number) => apiJSON<{ queued: boolean }>(`/api/tombstones/${id}/reanalyze`, token, { method: "POST" }),
@@ -79,9 +89,8 @@ export default function App() {
   });
 
   function saveToken() {
-    const value = tokenDraft.trim();
-    if (value) localStorage.setItem("pr_tombstone_token", value); else localStorage.removeItem("pr_tombstone_token");
-    setToken(value); setActiveRepoID(null); setSelected(null);
+    setToken(tokenDraft.trim());
+    setActiveRepoID(null); setSelected(null);
   }
   function selectRepo(id: number) { setActiveRepoID(id); setSelected(null); setQuery(""); setListLimit(100); }
 
@@ -90,7 +99,8 @@ export default function App() {
       <div><p className="eyebrow">Repository decision memory</p><h1>PR Tombstone</h1><p className="tagline">Dead patches still have something to teach us.</p></div>
       <div className="header-tools">
         <div className="queue" title="Analysis queue"><span>{jobs.data?.pending || 0} queued</span><span>{jobs.data?.running || 0} running</span></div>
-        <div className="token-box"><input type="password" value={tokenDraft} onChange={(event) => setTokenDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveToken()} placeholder="Dashboard token (optional)" /><button onClick={saveToken}>Apply</button></div>
+        {authMode === "oauth" && (auth.data?.user ? <div className="account"><img src={auth.data.user.avatar_url} alt="" referrerPolicy="no-referrer" /><span>{auth.data.user.name || auth.data.user.login}</span><button onClick={() => logout.mutate()} disabled={logout.isPending}>{logout.isPending ? "Signing out..." : "Sign out"}</button></div> : <a className="signin" href="/api/auth/login">Sign in with GitHub</a>)}
+        {authMode === "token" && <div className="token-box"><input type="password" value={tokenDraft} onChange={(event) => setTokenDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && saveToken()} placeholder="Dashboard token" /><button onClick={saveToken}>Apply</button></div>}
         <span className="pill">Read-only by default</span>
       </div>
     </header>
@@ -100,7 +110,7 @@ export default function App() {
         <div className="section-head"><div><p className="eyebrow">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : "No repository"}</p><h2>Decision memory</h2></div>{tab === "tombstones" && <input value={query} onChange={(event) => { setQuery(event.target.value); setListLimit(100); }} placeholder="Search mutex, Vulkan, lifetime..." />}</div>
         <nav className="tabs">{(["tombstones", "history", "graph", "settings"] as Tab[]).map((value) => <button key={value} className={tab === value ? "active" : ""} onClick={() => setTab(value)}>{value === "history" ? "New PR history" : value}</button>)}</nav>
         {activeRepo && <div className="repo-stats"><span><strong>{activeRepo.tombstone_count || 0}</strong>Tombstones</span><span><strong>{activeRepo.high_confidence || 0}</strong>High confidence</span><span><strong>{activeRepo.unknown_reason || 0}</strong>Unknown reason</span></div>}
-        {!activeRepo && <div className="empty page-empty">Select or install a repository to continue.</div>}
+        {!activeRepo && <div className="empty page-empty">{authMode === "oauth" && !auth.data?.user ? <><p>Sign in with GitHub to view your repositories.</p><a className="install-link" href="/api/auth/login">Sign in with GitHub →</a></> : "Select or install a repository to continue."}</div>}
         {activeRepo && tab === "tombstones" && <TombstoneView tombstones={tombstones.data?.tombstones || []} loading={tombstones.isLoading} hasMore={!!tombstones.data?.has_more} loadMore={() => setListLimit((value) => Math.min(3000, value + 100))} selected={selected} setSelected={setSelected} detail={detail.data} detailLoading={detail.isLoading} related={related.data?.matches || []} reanalyze={() => detail.data && reanalyze.mutate(detail.data.id)} reanalyzing={reanalyze.isPending} updateState={(state) => detail.data && updateState.mutate({ id: detail.data.id, state })} stateUpdating={updateState.isPending} />}
         {activeRepo && tab === "history" && <HistoryView items={history.data?.pull_requests || []} loading={history.isLoading} />}
         {activeRepo && tab === "graph" && <GraphView graph={graph.data} loading={graph.isLoading} />}

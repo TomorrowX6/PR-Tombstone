@@ -3,8 +3,6 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -85,25 +83,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/repositories/", s.repositories)
 	mux.HandleFunc("/api/tombstones/", s.tombstones)
 	mux.HandleFunc("/api/graph/", s.graph)
-	return s.observe(cors(s.dashboardAuth(mux)))
-}
-
-func (s *Server) dashboardAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.Config.DashboardToken == "" || r.URL.Path == "/api/healthz" || r.URL.Path == "/livez" || r.URL.Path == "/readyz" || r.URL.Path == "/api/github/webhook" || r.URL.Path == "/api/github/install" || r.URL.Path == "/api/github/setup" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		scheme, provided, ok := strings.Cut(r.Header.Get("Authorization"), " ")
-		providedHash := sha256.Sum256([]byte(provided))
-		expectedHash := sha256.Sum256([]byte(s.Config.DashboardToken))
-		if !ok || !strings.EqualFold(scheme, "Bearer") || subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="PR Tombstone"`)
-			http.Error(w, "dashboard authentication required", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	mux.HandleFunc("/api/auth/login", s.oauthLogin)
+	mux.HandleFunc("/api/auth/callback", s.oauthCallback)
+	mux.HandleFunc("/api/auth/logout", s.oauthLogout)
+	mux.HandleFunc("/api/auth/me", s.authStatus)
+	return s.observe(cors(s.authenticate(mux)))
 }
 
 func (s *Server) live(w http.ResponseWriter, _ *http.Request) {
@@ -125,7 +109,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	stats, err := s.Store.JobStats(r.Context())
+	stats, err := s.Store.JobStats(r.Context(), accessibleInstallations(r))
 	if err != nil {
 		http.Error(w, "read job metrics", http.StatusServiceUnavailable)
 		return
@@ -139,7 +123,7 @@ func (s *Server) jobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	stats, err := s.Store.JobStats(r.Context())
+	stats, err := s.Store.JobStats(r.Context(), accessibleInstallations(r))
 	if err != nil {
 		http.Error(w, "read jobs", http.StatusInternalServerError)
 		return
@@ -394,7 +378,7 @@ func (s *Server) repositories(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", 405)
 		return
 	}
-	items, err := s.Store.ListRepositories(r.Context())
+	items, err := s.Store.ListRepositories(r.Context(), accessibleInstallations(r))
 	if err != nil {
 		http.Error(w, "list repositories", 500)
 		return
@@ -406,6 +390,9 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request, rawID string) {
 	repoID, err := strconv.ParseInt(rawID, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid repository id", http.StatusBadRequest)
+		return
+	}
+	if !s.requireRepositoryAccess(w, r, repoID) {
 		return
 	}
 	items, err := s.Store.ListOpenPRHistory(r.Context(), repoID)
@@ -420,6 +407,9 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request, rawID string) 
 	repoID, err := strconv.ParseInt(rawID, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid repository id", http.StatusBadRequest)
+		return
+	}
+	if !s.requireRepositoryAccess(w, r, repoID) {
 		return
 	}
 	if _, err := s.Store.GetRepository(r.Context(), repoID); err != nil {
@@ -463,6 +453,9 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid repository id", http.StatusBadRequest)
 		return
 	}
+	if !s.requireRepositoryAccess(w, r, repoID) {
+		return
+	}
 	graph, err := s.Store.DecisionGraph(r.Context(), repoID)
 	if err != nil {
 		http.Error(w, "read decision graph", http.StatusInternalServerError)
@@ -475,6 +468,9 @@ func (s *Server) backfill(w http.ResponseWriter, r *http.Request, rawID string) 
 	repoID, err := strconv.ParseInt(rawID, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid repository id", http.StatusBadRequest)
+		return
+	}
+	if !s.requireRepositoryAccess(w, r, repoID) {
 		return
 	}
 	repo, err := s.Store.GetRepository(r.Context(), repoID)
@@ -553,6 +549,9 @@ func (s *Server) tombstones(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid repository id", 400)
 			return
 		}
+		if !s.requireRepositoryAccess(w, r, repoID) {
+			return
+		}
 		if len(parts) == 2 && r.Method == http.MethodGet {
 			query := r.URL.Query().Get("q")
 			limit := queryInt(r, "limit", 100, 1, 3000)
@@ -592,6 +591,9 @@ func (s *Server) tombstones(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		http.Error(w, "invalid tombstone id", 400)
+		return
+	}
+	if !s.requireTombstoneAccess(w, r, id) {
 		return
 	}
 	if len(parts) == 1 && r.Method == http.MethodGet {
