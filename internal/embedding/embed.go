@@ -15,7 +15,16 @@ import (
 	"time"
 )
 
-const Dimensions = 64
+const (
+	// LocalDimensions is the output width of the deterministic offline
+	// provider. It exists for fixtures and tests, not for production semantics.
+	LocalDimensions = 64
+	// StorageDimensions is the width of the tombstone_embeddings vector
+	// columns. Production providers must return exactly this width;
+	// OpenAI-compatible providers request it explicitly through the
+	// dimensions parameter instead of truncating a wider native vector.
+	StorageDimensions = 1536
+)
 
 type Provider interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
@@ -33,11 +42,11 @@ type Set struct {
 type LocalProvider struct{}
 
 func (LocalProvider) Embed(_ context.Context, text string) ([]float32, error) {
-	vector := make([]float32, Dimensions)
+	vector := make([]float32, LocalDimensions)
 	for _, token := range strings.Fields(strings.ToLower(text)) {
 		digest := sha256.Sum256([]byte(token))
 		for i := 0; i < 4; i++ {
-			index := int(digest[i]) % Dimensions
+			index := int(digest[i]) % LocalDimensions
 			sign := float32(1)
 			if digest[i+4]&1 == 1 {
 				sign = -1
@@ -60,7 +69,10 @@ func (p OpenAICompatibleProvider) Embed(ctx context.Context, text string) ([]flo
 	if p.HTTPClient == nil {
 		p.HTTPClient = &http.Client{Timeout: 60 * time.Second}
 	}
-	body, _ := json.Marshal(map[string]string{"model": p.Model, "input": text})
+	// Request the storage width explicitly instead of accepting the model's
+	// native width and truncating it, which would discard most of the vector's
+	// semantics. Providers that cannot honor dimensions fail loudly below.
+	body, _ := json.Marshal(map[string]any{"model": p.Model, "input": text, "dimensions": StorageDimensions})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(p.BaseURL, "/")+"/embeddings", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -87,7 +99,13 @@ func (p OpenAICompatibleProvider) Embed(ctx context.Context, text string) ([]flo
 	if len(decoded.Data) == 0 || len(decoded.Data[0].Embedding) == 0 {
 		return nil, errors.New("embedding provider returned no vector")
 	}
-	return Fit(decoded.Data[0].Embedding), nil
+	// The provider was asked for exactly the storage width. Accepting a
+	// different width and padding or truncating it would hide a model that
+	// ignores the dimensions parameter, so fail loudly instead.
+	if got := len(decoded.Data[0].Embedding); got != StorageDimensions {
+		return nil, fmt.Errorf("embedding provider %q returned %d dimensions, expected %d (configure a model that honors the dimensions parameter)", p.Model, got, StorageDimensions)
+	}
+	return decoded.Data[0].Embedding, nil
 }
 
 func New(provider, baseURL, key, model string) Provider {
@@ -111,13 +129,23 @@ func normalize(vector []float32) []float32 {
 	}
 	return vector
 }
-func Fit(vector []float32) []float32 {
-	if len(vector) == Dimensions {
-		return vector
+
+// Fit adapts a provider vector to the storage width. Vectors shorter than the
+// storage width are zero-padded, which preserves cosine distance exactly
+// (dot products and norms are unchanged). Longer vectors are never silently
+// truncated, because truncating e.g. 1536 dimensions to 64 discards most of a
+// real model's semantics; Fit returns an error instead so misconfiguration
+// surfaces immediately.
+func Fit(vector []float32) ([]float32, error) {
+	switch {
+	case len(vector) == StorageDimensions:
+		return vector, nil
+	case len(vector) > StorageDimensions:
+		return nil, fmt.Errorf("embedding vector has %d dimensions, storage supports at most %d", len(vector), StorageDimensions)
 	}
-	result := make([]float32, Dimensions)
-	copy(result, vector)
-	return normalize(result)
+	padded := make([]float32, StorageDimensions)
+	copy(padded, vector)
+	return padded, nil
 }
 func Encode(vector []float32) string {
 	parts := make([]string, len(vector))
