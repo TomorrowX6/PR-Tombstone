@@ -1,0 +1,187 @@
+/* Image2-inspired visual layer for dashboard surfaces not covered by the original reference. */
+:root {
+  --icon-repository: url('/icons/repository.svg');
+  --icon-tombstone: url('/icons/tombstone.svg');
+  --icon-history: url('/icons/history.svg');
+  --icon-graph: url('/icons/graph.svg');
+  --icon-settings: url('/icons/settings.svg');
+  --icon-shield: url('/icons/shield.svg');
+  --icon-question: url('/icons/question.svg');
+}
+
+.brand-mark {
+  background-image: var(--icon-tombstone), linear-gradient(145deg, #4d3a9e, #24285c 58%, #191d44);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 30px 30px, auto;
+}
+.brand-mark span { display: none; }
+
+.repo-icon,
+.repo-context-icon,
+.tabs button > span,
+.stat-icon {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+.repo-icon {
+  font-size: 0;
+  background-image: var(--icon-repository);
+  background-size: 30px 30px;
+}
+.repo-context-icon {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  font-size: 0;
+  background-image: var(--icon-repository);
+}
+.tabs button > span {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  font-size: 0;
+}
+.tabs button:nth-child(1) > span { background-image: var(--icon-tombstone); }
+.tabs button:nth-child(2) > span { background-image: var(--icon-history); }
+.tabs button:nth-child(3) > span { background-image: var(--icon-graph); }
+.tabs button:nth-child(4) > span { background-image: var(--icon-settings); }
+
+.stat-icon {
+  font-size: 0;
+  background-size: 34px 34px;
+}
+.stat-card.purple .stat-icon { background-image: var(--icon-tombstone); }
+.stat-card.blue .stat-icon { background-image: var(--icon-shield); }
+.stat-card.cyan .stat-icon { background-image: var(--icon-question); }
+
+/* History, graph and settings now share the same dark neon card language as Tombstones. */
+.history-grid,
+.settings-grid { gap: 18px; }
+.history-card,
+.panel,
+.graph-layout {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(75, 86, 136, .46);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(100, 76, 206, .13), transparent 38%),
+    linear-gradient(145deg, rgba(15, 22, 45, .98), rgba(10, 16, 34, .97));
+  box-shadow: inset 0 1px rgba(255,255,255,.018), 0 18px 50px rgba(2, 5, 18, .15);
+}
+.history-card::before,
+.graph-layout::before,
+.panel::before {
+  content: '';
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  width: 34px;
+  height: 34px;
+  opacity: .36;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+}
+.history-card::before { background-image: var(--icon-history); }
+.graph-layout::before { background-image: var(--icon-graph); }
+.panel::before { background-image: var(--icon-settings); }
+.history-card,
+.panel { transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.history-card:hover,
+.panel:hover {
+  border-color: rgba(119, 91, 224, .62);
+  transform: translateY(-1px);
+}
+
+.history-card h3 { padding-right: 48px; font-size: 19px; }
+.match {
+  border-color: rgba(55, 76, 126, .64);
+  background: linear-gradient(135deg, rgba(16, 25, 50, .92), rgba(10, 17, 36, .92));
+}
+.match.warning {
+  border-color: rgba(204, 143, 63, .42);
+  background: linear-gradient(135deg, rgba(61, 38, 29, .42), rgba(18, 21, 38, .95));
+}
+.no-conflict {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid rgba(67, 180, 132, .23);
+  border-radius: 9px;
+  background: rgba(29, 100, 78, .12);
+}
+
+.graph-layout {
+  min-height: 320px;
+  padding: 26px;
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+.graph-summary {
+  padding: 18px;
+  border: 1px solid rgba(79, 101, 167, .34);
+  border-radius: 13px;
+  background: rgba(9, 15, 32, .65);
+}
+.edge {
+  min-height: 46px;
+  align-items: center;
+  border: 1px solid rgba(50, 66, 112, .38);
+  background: linear-gradient(90deg, rgba(14, 22, 44, .92), rgba(12, 19, 38, .72));
+}
+.edge b { text-shadow: 0 0 14px rgba(123, 94, 255, .28); }
+
+.panel { padding: 24px; }
+.panel h3 { padding-right: 44px; }
+.field select,
+.backfill select {
+  border-color: #313d61;
+  background: #0b1328;
+}
+.toggle {
+  padding: 13px;
+  border: 1px solid rgba(53, 66, 108, .4);
+  border-radius: 10px;
+  background: rgba(8, 15, 32, .42);
+}
+.primary { box-shadow: 0 10px 28px rgba(73, 55, 190, .22); }
+
+/* Detail/evidence surfaces also receive the richer generated style. */
+.detail {
+  border-color: rgba(91, 70, 166, .46);
+  background:
+    radial-gradient(circle at 86% 4%, rgba(71, 78, 188, .13), transparent 32%),
+    linear-gradient(145deg, rgba(14, 20, 42, .98), rgba(9, 15, 32, .98));
+}
+.detail section {
+  margin: 0 -2px;
+  padding: 18px 2px;
+}
+.evidence-item,
+.related-item {
+  border-color: rgba(57, 72, 119, .46);
+  background: linear-gradient(135deg, rgba(11, 19, 39, .92), rgba(13, 22, 44, .82));
+}
+.evidence-item:hover,
+.related-item:hover { border-color: rgba(117, 92, 223, .64); }
+
+.page-empty {
+  position: relative;
+  min-height: 330px;
+  border-style: solid;
+  border-color: rgba(59, 72, 118, .42);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(91, 64, 181, .12), transparent 30%),
+    linear-gradient(145deg, rgba(12, 19, 40, .92), rgba(8, 14, 30, .92));
+  box-shadow: inset 0 0 70px rgba(56, 42, 132, .05);
+}
+
+@media (max-width: 900px) {
+  .graph-layout { grid-template-columns: 1fr; padding: 20px; }
+  .history-card::before,
+  .graph-layout::before,
+  .panel::before { opacity: .25; }
+}
