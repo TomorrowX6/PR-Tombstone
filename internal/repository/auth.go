@@ -39,8 +39,20 @@ func (s *Store) ReplaceUserInstallations(ctx context.Context, userID int64, inst
 	return tx.Commit()
 }
 
+var ErrACLSnapshotExpired = errors.New("GitHub installation ACL snapshot expired")
+
 // UserInstallations returns the GitHub installation IDs the user may access.
-func (s *Store) UserInstallations(ctx context.Context, userID int64) ([]int64, error) {
+// The snapshot is accepted only for maxAge after the user's last OAuth login.
+// This bounds authorization-revocation delay without persisting the GitHub user
+// token: once stale, the caller must sign in again to refresh GET /user/installations.
+func (s *Store) UserInstallations(ctx context.Context, userID int64, maxAge time.Duration) ([]int64, error) {
+	var refreshedAt time.Time
+	if err := s.DB.QueryRowContext(ctx, `SELECT last_login_at FROM dashboard_users WHERE id=$1`, userID).Scan(&refreshedAt); err != nil {
+		return nil, err
+	}
+	if maxAge > 0 && time.Since(refreshedAt) > maxAge {
+		return nil, ErrACLSnapshotExpired
+	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT installation_github_id FROM user_installations WHERE user_id=$1`, userID)
 	if err != nil {
 		return nil, err
