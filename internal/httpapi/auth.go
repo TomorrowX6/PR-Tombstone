@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"pr-tombstone/internal/auth"
+	"pr-tombstone/internal/model"
 )
 
 // OAuth login flow:
 //
 //	GET  /api/auth/login    → set short-lived state cookie, redirect to GitHub
 //	GET  /api/auth/callback → verify state, exchange code, snapshot the user's
-//	                          installations, create a server-side session
+//	                          installations and repositories, create a session
 //	POST /api/auth/logout   → drop the server-side session
 //	GET  /api/auth/me       → report the resolved auth mode and current user
 //
@@ -127,6 +128,24 @@ func (s *Server) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Error("oauth installations lookup", "error", err)
 		http.Error(w, "OAuth installations lookup failed", http.StatusBadGateway)
 		return
+	}
+	for _, installationID := range installations {
+		repositories, repoErr := flow.Repositories(r.Context(), token, installationID)
+		if repoErr != nil {
+			s.Logger.Error("oauth repositories lookup", "installation", installationID, "error", repoErr)
+			http.Error(w, "OAuth repositories lookup failed", http.StatusBadGateway)
+			return
+		}
+		if err := s.Store.UpsertInstallation(r.Context(), model.Installation{GitHubID: installationID}); err != nil {
+			http.Error(w, "persist installation", http.StatusInternalServerError)
+			return
+		}
+		for _, repo := range repositories {
+			if _, err := s.Store.EnsureRepository(r.Context(), model.Repository{GitHubID: repo.GitHubID, InstallationID: installationID, Owner: repo.Owner, Name: repo.Name, Private: repo.Private}); err != nil {
+				http.Error(w, "persist installation repository", http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	user, err := s.Store.UpsertDashboardUser(r.Context(), profile.GitHubID, profile.Login, profile.Name, profile.AvatarURL)
 	if err != nil {

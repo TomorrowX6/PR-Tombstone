@@ -18,8 +18,9 @@ import (
 
 // OAuth implements the GitHub OAuth web application flow used for dashboard
 // login. The flow is driven with the GitHub App's OAuth client credentials;
-// the resulting user token authorizes profile and installation reads. The
-// token itself is never persisted — access snapshots refresh on every login.
+// the resulting user token authorizes profile, installation, and repository
+// reads. The token itself is never persisted — access snapshots refresh on
+// every login.
 type OAuth struct {
 	ClientID, ClientSecret string
 	APIBase, WebBase       string
@@ -32,6 +33,15 @@ type UserProfile struct {
 	Login     string
 	Name      string
 	AvatarURL string
+}
+
+// InstallationRepository is a repository visible to the authenticated user
+// through one installation of this GitHub App.
+type InstallationRepository struct {
+	GitHubID int64
+	Owner    string
+	Name     string
+	Private  bool
 }
 
 // LoginURL builds the GitHub authorize redirect for the web flow.
@@ -111,6 +121,41 @@ func (o OAuth) Installations(ctx context.Context, token string) ([]int64, error)
 		}
 		if len(response.Installations) < 100 {
 			return ids, nil
+		}
+	}
+}
+
+// Repositories lists repositories visible to the user for one GitHub App
+// installation. Login uses this as a recovery/synchronization path so the
+// dashboard does not depend on an installation webhook having arrived first.
+func (o OAuth) Repositories(ctx context.Context, token string, installationID int64) ([]InstallationRepository, error) {
+	if installationID <= 0 {
+		return nil, errors.New("installation id must be positive")
+	}
+	out := make([]InstallationRepository, 0)
+	for page := 1; ; page++ {
+		var response struct {
+			Repositories []struct {
+				ID      int64  `json:"id"`
+				Name    string `json:"name"`
+				Private bool   `json:"private"`
+				Owner   struct {
+					Login string `json:"login"`
+				} `json:"owner"`
+			} `json:"repositories"`
+		}
+		path := "/user/installations/" + strconv.FormatInt(installationID, 10) + "/repositories?per_page=100&page=" + strconv.Itoa(page)
+		if err := o.get(ctx, path, token, &response); err != nil {
+			return nil, err
+		}
+		for _, repo := range response.Repositories {
+			if repo.ID <= 0 || repo.Name == "" || repo.Owner.Login == "" {
+				continue
+			}
+			out = append(out, InstallationRepository{GitHubID: repo.ID, Owner: repo.Owner.Login, Name: repo.Name, Private: repo.Private})
+		}
+		if len(response.Repositories) < 100 {
+			return out, nil
 		}
 	}
 }
