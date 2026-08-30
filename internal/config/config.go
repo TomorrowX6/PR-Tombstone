@@ -74,8 +74,8 @@ func Load() Config {
 		JobPollInterval:    durationEnv("JOB_POLL_INTERVAL", 2*time.Second),
 		RetentionDays:      intEnv("RETENTION_DAYS", 30),
 		CronSecret:         os.Getenv("CRON_SECRET"),
-		VercelWorkerBatch:  positiveIntEnv("VERCEL_WORKER_BATCH", 5),
-		VercelWorkerBudget: durationEnv("VERCEL_WORKER_BUDGET", 50*time.Second),
+		VercelWorkerBatch:  5,
+		VercelWorkerBudget: 50 * time.Second,
 	}
 }
 
