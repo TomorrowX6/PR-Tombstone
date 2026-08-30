@@ -155,7 +155,10 @@ func EmbedResult(ctx context.Context, provider embedding.Provider, snapshot mode
 		if err != nil {
 			return embedding.Set{}, err
 		}
-		vectors[i] = embedding.Fit(vector)
+		vectors[i], err = embedding.Fit(vector)
+		if err != nil {
+			return embedding.Set{}, err
+		}
 	}
 	return embedding.Set{Title: vectors[0], Description: vectors[1], Discussion: vectors[2], Approach: vectors[3]}, nil
 }

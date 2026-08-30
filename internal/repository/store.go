@@ -365,15 +365,27 @@ func (s *Store) SaveAnalysis(ctx context.Context, snapshot model.PullRequestSnap
 	return tx.Commit()
 }
 
-func vectorParam(value []float32) any {
+func vectorParam(value []float32) (any, error) {
 	if len(value) == 0 {
-		return nil
+		return nil, nil
 	}
-	return embedding.Encode(embedding.Fit(value))
+	fitted, err := embedding.Fit(value)
+	if err != nil {
+		return nil, err
+	}
+	return embedding.Encode(fitted), nil
 }
 
 func (s *Store) SaveEmbeddings(ctx context.Context, tombstoneID int64, values embedding.Set) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO tombstone_embeddings (tombstone_id,title_embedding,description_embedding,discussion_embedding,approach_embedding) VALUES ($1,$2::vector,$3::vector,$4::vector,$5::vector) ON CONFLICT (tombstone_id) DO UPDATE SET title_embedding=EXCLUDED.title_embedding,description_embedding=EXCLUDED.description_embedding,discussion_embedding=EXCLUDED.discussion_embedding,approach_embedding=EXCLUDED.approach_embedding,updated_at=NOW()`, tombstoneID, vectorParam(values.Title), vectorParam(values.Description), vectorParam(values.Discussion), vectorParam(values.Approach))
+	params := make([]any, 4)
+	for i, value := range [][]float32{values.Title, values.Description, values.Discussion, values.Approach} {
+		param, err := vectorParam(value)
+		if err != nil {
+			return err
+		}
+		params[i] = param
+	}
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO tombstone_embeddings (tombstone_id,title_embedding,description_embedding,discussion_embedding,approach_embedding) VALUES ($1,$2::vector,$3::vector,$4::vector,$5::vector) ON CONFLICT (tombstone_id) DO UPDATE SET title_embedding=EXCLUDED.title_embedding,description_embedding=EXCLUDED.description_embedding,discussion_embedding=EXCLUDED.discussion_embedding,approach_embedding=EXCLUDED.approach_embedding,updated_at=NOW()`, tombstoneID, params[0], params[1], params[2], params[3])
 	return err
 }
 
@@ -387,7 +399,11 @@ func (s *Store) SearchSemantic(ctx context.Context, repoID int64, queryVector []
 	if limit > 100 {
 		limit = 100
 	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT t.id,t.repository_id,t.pr_number,t.state,t.summary,t.result,t.confidence,t.model_version,t.schema_version,t.generated_at,r.owner,r.name,r.github_id,r.installation_id,r.private,p.snapshot FROM tombstones t JOIN tombstone_embeddings e ON e.tombstone_id=t.id JOIN repositories r ON r.id=t.repository_id JOIN pull_requests p ON p.repository_id=t.repository_id AND p.number=t.pr_number WHERE t.repository_id=$1 AND e.approach_embedding IS NOT NULL ORDER BY e.approach_embedding <=> $2::vector LIMIT $3`, repoID, embedding.Encode(embedding.Fit(queryVector)), limit)
+	fitted, err := embedding.Fit(queryVector)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.DB.QueryContext(ctx, `SELECT t.id,t.repository_id,t.pr_number,t.state,t.summary,t.result,t.confidence,t.model_version,t.schema_version,t.generated_at,r.owner,r.name,r.github_id,r.installation_id,r.private,p.snapshot FROM tombstones t JOIN tombstone_embeddings e ON e.tombstone_id=t.id JOIN repositories r ON r.id=t.repository_id JOIN pull_requests p ON p.repository_id=t.repository_id AND p.number=t.pr_number WHERE t.repository_id=$1 AND e.approach_embedding IS NOT NULL ORDER BY e.approach_embedding <=> $2::vector LIMIT $3`, repoID, embedding.Encode(fitted), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +426,11 @@ func (s *Store) SemanticScores(ctx context.Context, repoID int64, queryVector []
 	if limit < 1 || limit > 3001 {
 		limit = 500
 	}
-	vector := embedding.Encode(embedding.Fit(queryVector))
+	fitted, err := embedding.Fit(queryVector)
+	if err != nil {
+		return nil, err
+	}
+	vector := embedding.Encode(fitted)
 	rows, err := s.DB.QueryContext(ctx, `SELECT t.pr_number,GREATEST(COALESCE(1-(e.title_embedding <=> $2::vector),0),COALESCE(1-(e.description_embedding <=> $2::vector),0),COALESCE(1-(e.approach_embedding <=> $2::vector),0)) AS score FROM tombstones t JOIN tombstone_embeddings e ON e.tombstone_id=t.id WHERE t.repository_id=$1 ORDER BY score DESC LIMIT $3`, repoID, vector, limit)
 	if err != nil {
 		return nil, err

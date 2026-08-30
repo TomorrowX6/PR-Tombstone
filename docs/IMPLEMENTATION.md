@@ -82,7 +82,7 @@ Optional Contents reads collect bounded CODEOWNERS and CONTRIBUTING evidence. Op
 4. Claims without real evidence IDs are discarded.
 5. Platform confidence is recomputed independently.
 6. Full patches are redacted before persistence.
-7. Four 64-dimensional embeddings and typed graph relations are stored.
+7. Four embeddings are stored at the 1536-dimensional storage width, alongside typed graph relations. The local provider zero-pads its 64-dimensional vectors (exact under cosine distance); OpenAI-compatible providers are asked for `dimensions=1536` explicitly, and any differently-sized response is a configuration error rather than a silent truncation.
 
 Search combines PostgreSQL FTS/fallback text matching with pgvector ranking. New-PR matching combines provider-backed semantic similarity, file overlap, path/module overlap, approach similarity, labels, and symbols. Scores below 60% are hidden; 60–80% are related history; scores above 80% are warnings. Every match persists a per-signal `components` breakdown (`semantic`, `title_body`, `files`, `paths`, `approach`, `labels`, `symbols`) and a reason string rendered from those real values; when no embedding-backed semantic score exists the match says `semantic unavailable` instead of claiming one. The weights and thresholds are provisional heuristics and will be calibrated with the labeled dogfood dataset.
 
