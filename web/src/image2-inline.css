@@ -1,24 +1,68 @@
 /* Critical Image2 assets are inlined so icon rendering never depends on a separate static request. */
 :root {
-  --i2-repo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='8' y1='56' x2='56' y2='8'%3E%3Cstop stop-color='%238b58ff'/%3E%3Cstop offset='1' stop-color='%235f9dff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='12' y='12' width='40' height='40' rx='10' fill='%23111934' stroke='url(%23g)' stroke-width='3'/%3E%3Cpath d='M25 24l-8 8 8 8M39 24l8 8-8 8M35 20l-6 24' fill='none' stroke='%23dbe2ff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  /* Repository glyph intentionally has no inner tile: .repo-icon already provides the tile. */
+  --i2-repo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='12' y1='52' x2='52' y2='12'%3E%3Cstop stop-color='%23915fff'/%3E%3Cstop offset='1' stop-color='%2366b6ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M24 20L12 32l12 12M40 20l12 12-12 12M37 15L27 49' fill='none' stroke='url(%23g)' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --i2-tomb: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='8' y1='56' x2='56' y2='8'%3E%3Cstop stop-color='%237c4dff'/%3E%3Cstop offset='1' stop-color='%23b7a5ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M18 52V27c0-10 6-17 14-17s14 7 14 17v25' fill='%2316183b' stroke='url(%23g)' stroke-width='4'/%3E%3Cpath d='M13 52h38M24 33h16M28 27h8' stroke='%23d8d2ff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   --i2-history: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='34' cy='32' r='18' fill='%23101832' stroke='%237e6cff' stroke-width='4'/%3E%3Cpath d='M34 21v12l8 5M18 21h-8v-8' fill='none' stroke='%23dce3ff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M11 20a25 25 0 102-14' fill='none' stroke='%238b70ff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   --i2-graph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23101832' stroke='%238c6cff' stroke-width='3'%3E%3Ccircle cx='16' cy='32' r='7'/%3E%3Ccircle cx='38' cy='16' r='7'/%3E%3Ccircle cx='48' cy='44' r='7'/%3E%3C/g%3E%3Cpath d='M22 28l10-8M22 35l19 7M42 23l4 14' fill='none' stroke='%2366b6ff' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
   --i2-settings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M27 10h10l2 7 6 3 7-2 5 9-5 5v7l5 5-5 9-7-2-6 3-2 7H27l-2-7-6-3-7 2-5-9 5-5v-7l-5-5 5-9 7 2 6-3z' fill='%23101832' stroke='%238a6dff' stroke-width='3' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='35' r='8' fill='none' stroke='%23d9e1ff' stroke-width='3'/%3E%3C/svg%3E");
-  --i2-shield: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 8l20 8v14c0 13-8 22-20 28C20 52 12 43 12 30V16z' fill='%230d2443' stroke='%234ac7ff' stroke-width='3.5'/%3E%3Cpath d='M22 32l7 7 14-16' fill='none' stroke='%23ccefff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  --i2-question: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='23' fill='%230d2a35' stroke='%233ee2e7' stroke-width='3.5'/%3E%3Cpath d='M24 24c1-6 6-9 12-9 7 0 12 4 12 10 0 10-12 9-12 17' fill='none' stroke='%23d4fbff' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='36' cy='49' r='2.5' fill='%23d4fbff'/%3E%3C/svg%3E");
+
+  /* Stat glyphs share the same optical box and do not carry a second background/plate. */
+  --i2-stat-tomb: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M19 49V29c0-9 5-15 13-15s13 6 13 15v20M15 50h34M25 31h14M28 25h8' fill='none' stroke='%23cdbbff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --i2-stat-shield: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 13l16 6v12c0 10-6 17-16 22-10-5-16-12-16-22V19zM23 32l6 6 12-14' fill='none' stroke='%2375d8ff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --i2-stat-question: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M23 25c1-7 6-11 13-11 8 0 13 5 13 12 0 11-13 10-13 19' fill='none' stroke='%2378f4f7' stroke-width='4.5' stroke-linecap='round'/%3E%3Ccircle cx='36' cy='52' r='3' fill='%2378f4f7'/%3E%3C/svg%3E");
 }
 
-.repo-icon { background-image: var(--i2-repo) !important; background-size: 30px 30px !important; }
-.repo-context-icon { background-image: var(--i2-repo) !important; }
+/* Sidebar repository icon: one outer tile, one glyph. No pseudo-element fallback overlay. */
+.repo-icon {
+  position: relative;
+  background-image: var(--i2-repo) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 24px 24px !important;
+}
+.repo-icon::after { content: none !important; display: none !important; }
+.repo-context-icon {
+  background-image: var(--i2-repo) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 20px 20px !important;
+}
+
 .tabs button:nth-child(1) > span { background-image: var(--i2-tomb) !important; }
 .tabs button:nth-child(2) > span { background-image: var(--i2-history) !important; }
 .tabs button:nth-child(3) > span { background-image: var(--i2-graph) !important; }
 .tabs button:nth-child(4) > span { background-image: var(--i2-settings) !important; }
-.stat-card.purple .stat-icon { background-image: var(--i2-tomb) !important; }
-.stat-card.blue .stat-icon { background-image: var(--i2-shield) !important; }
-.stat-card.cyan .stat-icon { background-image: var(--i2-question) !important; }
 .brand-mark { background-image: var(--i2-tomb), linear-gradient(145deg, #4d3a9e, #24285c 58%, #191d44) !important; }
+
+/* Metric icons use one identical circular plate and one identical 30px artwork box. */
+.stat-icon {
+  position: relative;
+  width: 54px !important;
+  height: 54px !important;
+  min-width: 54px !important;
+  flex: 0 0 54px !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden;
+  background-image: none !important;
+  background-repeat: no-repeat !important;
+}
+.stat-icon::before {
+  content: '';
+  display: block;
+  width: 30px;
+  height: 30px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 30px 30px;
+}
+.stat-card.purple .stat-icon,
+.stat-card.blue .stat-icon,
+.stat-card.cyan .stat-icon { background-image: none !important; }
+.stat-card.purple .stat-icon::before { background-image: var(--i2-stat-tomb); }
+.stat-card.blue .stat-icon::before { background-image: var(--i2-stat-shield); }
+.stat-card.cyan .stat-icon::before { background-image: var(--i2-stat-question); }
 
 .hero { position: relative; min-height: 168px; overflow: hidden; padding-right: min(34vw, 440px); }
 .hero::before {
@@ -44,17 +88,6 @@
   opacity: .72;
   text-shadow: 0 0 18px #725dff;
   pointer-events: none;
-}
-
-.repo-icon { position: relative; }
-.repo-icon::after {
-  content: '</>';
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: rgba(219,226,255,.18);
-  font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @media (max-width: 900px) {
