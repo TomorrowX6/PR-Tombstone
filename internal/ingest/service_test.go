@@ -12,7 +12,7 @@ func TestVerifyResultRecomputesConfidenceAndDropsUnknownEvidence(t *testing.T) {
 		{Claim: "Supported", Confidence: 1, EvidenceIDs: []string{"review:1", "missing"}},
 		{Claim: "Unsupported", Confidence: 1, EvidenceIDs: []string{"missing"}},
 	}}
-	verified := verifyResult(result, items)
+	verified := VerifyResult(result, items)
 	if len(verified.AttemptedApproach) != 1 || len(verified.AttemptedApproach[0].EvidenceIDs) != 1 {
 		t.Fatalf("unexpected claims: %+v", verified.AttemptedApproach)
 	}
@@ -22,7 +22,7 @@ func TestVerifyResultRecomputesConfidenceAndDropsUnknownEvidence(t *testing.T) {
 }
 
 func TestOutputEnumsAndAreasAreBounded(t *testing.T) {
-	outcomes := verifiedOutcomes([]model.Outcome{"invented", model.OutcomeDuplicate, model.OutcomeDuplicate})
+	outcomes := VerifiedOutcomes([]model.Outcome{"invented", model.OutcomeDuplicate, model.OutcomeDuplicate})
 	if len(outcomes) != 1 || outcomes[0] != model.OutcomeDuplicate {
 		t.Fatalf("unexpected outcomes: %v", outcomes)
 	}

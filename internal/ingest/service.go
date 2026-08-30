@@ -85,8 +85,8 @@ func (s *Service) Process(ctx context.Context, job *repository.Job) error {
 	if err != nil {
 		return err
 	}
-	result = verifyResult(result, ranked)
-	result.Outcomes = verifiedOutcomes(result.Outcomes)
+	result = VerifyResult(result, ranked)
+	result.Outcomes = VerifiedOutcomes(result.Outcomes)
 	result.AffectedAreas = verifiedAreas(result.AffectedAreas, snapshot.Files)
 	confidenceValue := aggregateConfidence(result)
 	if err := s.Store.SaveAnalysis(ctx, snapshot, *result, ranked, confidenceValue, s.Config.AIModel); err != nil {
@@ -170,7 +170,11 @@ func truncate(value string, limit int) string {
 	return strings.ToValidUTF8(value[:limit], "")
 }
 
-func verifyResult(result *model.AnalysisResult, items []model.EvidenceItem) *model.AnalysisResult {
+// VerifyResult drops claims that cite no valid evidence ID or carry an empty
+// claim text, and recomputes each claim's confidence against the ranked items.
+// It is the single verification gate for every analysis path; the eval
+// harness reuses it so measurements reflect production behavior.
+func VerifyResult(result *model.AnalysisResult, items []model.EvidenceItem) *model.AnalysisResult {
 	valid := map[string]bool{}
 	for _, item := range items {
 		valid[item.ID] = true
@@ -215,7 +219,10 @@ func aggregateConfidence(result *model.AnalysisResult) float64 {
 	return total / float64(count)
 }
 
-func verifiedOutcomes(values []model.Outcome) []model.Outcome {
+// VerifiedOutcomes de-duplicates the outcome list, drops values outside the
+// model's outcome vocabulary, and falls back to unknown when nothing remains.
+// Exported for the eval harness, which must score against the same vocabulary.
+func VerifiedOutcomes(values []model.Outcome) []model.Outcome {
 	allowed := map[model.Outcome]bool{
 		model.OutcomeSuperseded: true, model.OutcomeDuplicate: true, model.OutcomeDesignDisagreement: true,
 		model.OutcomeImplementationProblem: true, model.OutcomePerformanceConcern: true, model.OutcomeRegressionRisk: true,
