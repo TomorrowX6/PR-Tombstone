@@ -41,3 +41,33 @@ func TestExplicitDeploymentSettingsWin(t *testing.T) {
 		t.Fatalf("worker settings = %d/%s", cfg.VercelWorkerBatch, cfg.VercelWorkerBudget)
 	}
 }
+
+func TestOAuthEnabledRequiresBothCredentials(t *testing.T) {
+	if (Config{}).OAuthEnabled() {
+		t.Fatal("empty config must not enable OAuth")
+	}
+	if (Config{OAuthClientID: "id"}).OAuthEnabled() {
+		t.Fatal("client id alone must not enable OAuth")
+	}
+	if (Config{OAuthClientSecret: "secret"}).OAuthEnabled() {
+		t.Fatal("client secret alone must not enable OAuth")
+	}
+	if !(Config{OAuthClientID: "id", OAuthClientSecret: "secret"}).OAuthEnabled() {
+		t.Fatal("both credentials must enable OAuth")
+	}
+}
+
+func TestOAuthWebBaseURL(t *testing.T) {
+	cases := map[string]string{
+		"https://api.github.com":          "https://github.com",
+		"https://api.github.com/":         "https://github.com",
+		"https://ghe.example.com/api/v3":  "https://ghe.example.com",
+		"https://ghe.example.com/api/v3/": "https://ghe.example.com",
+		"":                                "https://github.com",
+	}
+	for apiBase, want := range cases {
+		if got := (Config{GitHubAPIBaseURL: apiBase}).OAuthWebBaseURL(); got != want {
+			t.Fatalf("OAuthWebBaseURL(%q) = %q, want %q", apiBase, got, want)
+		}
+	}
+}

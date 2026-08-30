@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,10 @@ type Config struct {
 	GitHubAppSlug      string
 	PublicBaseURL      string
 	DashboardToken     string
+	OAuthClientID      string
+	OAuthClientSecret  string
+	SessionTTL         time.Duration
+	OAuthACLTTL        time.Duration
 	AIProvider         string
 	AIBaseURL          string
 	AIAPIKey           string
@@ -54,6 +59,10 @@ func Load() Config {
 		GitHubAppSlug:      os.Getenv("GITHUB_APP_SLUG"),
 		PublicBaseURL:      publicBaseURL(),
 		DashboardToken:     os.Getenv("DASHBOARD_TOKEN"),
+		OAuthClientID:      os.Getenv("GITHUB_OAUTH_CLIENT_ID"),
+		OAuthClientSecret:  os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"),
+		SessionTTL:         durationEnv("SESSION_TTL", 14*24*time.Hour),
+		OAuthACLTTL:        durationEnv("OAUTH_ACL_TTL", time.Hour),
 		AIProvider:         env("AI_PROVIDER", "rules"),
 		AIBaseURL:          env("AI_BASE_URL", ""),
 		AIAPIKey:           os.Getenv("AI_API_KEY"),
@@ -85,6 +94,24 @@ func publicBaseURL() string {
 	return "http://localhost:5173"
 }
 
+// OAuthEnabled reports whether GitHub OAuth login is configured. Without it
+// the dashboard falls back to the self-host modes (DASHBOARD_TOKEN bearer or
+// fully open when both are empty).
+func (c Config) OAuthEnabled() bool {
+	return c.OAuthClientID != "" && c.OAuthClientSecret != ""
+}
+
+// OAuthWebBaseURL derives the OAuth authorize/token web endpoint from the
+// REST API base URL so GitHub Enterprise hosts keep working: api.github.com
+// maps to github.com and <host>/api/v3 maps to <host>.
+func (c Config) OAuthWebBaseURL() string {
+	base := strings.TrimSuffix(c.GitHubAPIBaseURL, "/")
+	if base == "" || base == "https://api.github.com" {
+		return "https://github.com"
+	}
+	base = strings.TrimSuffix(base, "/api/v3")
+	return base
+}
 func env(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
