@@ -61,13 +61,13 @@ export default function App() {
   const authed = auth.data ? (auth.data.mode === "oauth" ? !!auth.data.user : auth.data.mode === "token" ? !!token : true) : false;
   const logout = useMutation({ mutationFn: () => apiJSON<{ ok: boolean }>("/api/auth/logout", "", { method: "POST" }), onSuccess: () => { setActiveRepoID(null); setSelected(null); queryClient.invalidateQueries({ queryKey: ["auth"] }); } });
 
-  const repos = useQuery({ queryKey: ["repositories", token], queryFn: () => apiJSON<{ repositories: Repo[] }>("/api/repositories", token), enabled: authed });
+  const repos = useQuery({ queryKey: ["repositories", token], queryFn: () => apiJSON<{ repositories: Repo[] | null }>("/api/repositories", token), enabled: authed });
   useEffect(() => {
     const available = repos.data?.repositories || [];
     if (available.length && !available.some((repo) => repo.id === activeRepoID)) setActiveRepoID(available[0].id);
   }, [repos.data, activeRepoID]);
 
-  const activeRepo = useMemo(() => repos.data?.repositories.find((repo) => repo.id === activeRepoID), [repos.data, activeRepoID]);
+  const activeRepo = useMemo(() => repos.data?.repositories?.find((repo) => repo.id === activeRepoID), [repos.data, activeRepoID]);
   const tombstones = useQuery({
     queryKey: ["tombstones", activeRepo?.id, query, listLimit, token], enabled: !!activeRepo && tab === "tombstones",
     queryFn: () => apiJSON<{ tombstones: Tombstone[]; has_more: boolean }>(`/api/tombstones/repository/${activeRepo!.id}?limit=${listLimit}${query ? `&q=${encodeURIComponent(query)}` : ""}`, token),
@@ -105,7 +105,7 @@ export default function App() {
       </div>
     </header>
     <main>
-      <aside><h2>Repositories</h2>{repos.isLoading && <p>Loading...</p>}{repos.isError && <p className="error">{String(repos.error)}</p>}{repos.data?.repositories.map((repo) => <button className={`repo ${repo.id === activeRepo?.id ? "active" : ""}`} key={repo.id} onClick={() => selectRepo(repo.id)}>{repo.owner}/{repo.name}<small>{repo.private ? "Private" : "Public"} · {repo.tombstone_count || 0} Tombstones</small></button>)}{!repos.data?.repositories.length && !repos.isLoading && !repos.isError && <div className="empty">Install the GitHub App to start preserving history.<a className="install-link" href="/api/github/install">Install GitHub App →</a></div>}</aside>
+      <aside><h2>Repositories</h2>{repos.isLoading && <p>Loading...</p>}{repos.isError && <p className="error">{String(repos.error)}</p>}{repos.data?.repositories?.map((repo) => <button className={`repo ${repo.id === activeRepo?.id ? "active" : ""}`} key={repo.id} onClick={() => selectRepo(repo.id)}>{repo.owner}/{repo.name}<small>{repo.private ? "Private" : "Public"} · {repo.tombstone_count || 0} Tombstones</small></button>)}{!repos.data?.repositories?.length && !repos.isLoading && !repos.isError && <div className="empty">Install the GitHub App to start preserving history.<a className="install-link" href="/api/github/install">Install GitHub App →</a></div>}</aside>
       <section className="content">
         <div className="section-head"><div><p className="eyebrow">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : "No repository"}</p><h2>Decision memory</h2></div>{tab === "tombstones" && <input value={query} onChange={(event) => { setQuery(event.target.value); setListLimit(100); }} placeholder="Search mutex, Vulkan, lifetime..." />}</div>
         <nav className="tabs">{(["tombstones", "history", "graph", "settings"] as Tab[]).map((value) => <button key={value} className={tab === value ? "active" : ""} onClick={() => setTab(value)}>{value === "history" ? "New PR history" : value}</button>)}</nav>
