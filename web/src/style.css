@@ -145,3 +145,8 @@ aside { border-right: 1px solid #2b3553; padding-right: 24px; min-height: 700px;
   .edge b { text-align: left; }
   .backfill { flex-direction: column; }
 }
+
+/* Per-signal similarity breakdown (PR: explainable similarity). */
+.components { display: flex; flex-wrap: wrap; gap: 6px; margin: 7px 0 0; }
+.components span { font-size: 11px; color: #c6d2f5; background: #131d36; border: 1px solid #2a3a63; border-radius: 999px; padding: 2px 9px; }
+.components span.unavailable { color: #8e99b8; border-style: dashed; }

@@ -84,7 +84,7 @@ Optional Contents reads collect bounded CODEOWNERS and CONTRIBUTING evidence. Op
 6. Full patches are redacted before persistence.
 7. Four 64-dimensional embeddings and typed graph relations are stored.
 
-Search combines PostgreSQL FTS/fallback text matching with pgvector ranking. New-PR matching combines provider-backed semantic similarity, file overlap, path/module overlap, approach similarity, labels, and symbols. Scores below 60% are hidden; 60–80% are related history; scores above 80% are warnings.
+Search combines PostgreSQL FTS/fallback text matching with pgvector ranking. New-PR matching combines provider-backed semantic similarity, file overlap, path/module overlap, approach similarity, labels, and symbols. Scores below 60% are hidden; 60–80% are related history; scores above 80% are warnings. Every match persists a per-signal `components` breakdown (`semantic`, `title_body`, `files`, `paths`, `approach`, `labels`, `symbols`) and a reason string rendered from those real values; when no embedding-backed semantic score exists the match says `semantic unavailable` instead of claiming one. The weights and thresholds are provisional heuristics and will be calibrated with the labeled dogfood dataset.
 
 ## Operations
 
