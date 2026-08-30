@@ -1,169 +1,277 @@
 # PR Tombstone
 
-> **Dead patches still have something to teach us.**
+> **Preserve the engineering context behind closed, unmerged pull requests.**
 
-PR Tombstone 是一个 GitHub App，用于保存 **Closed but not merged Pull Request** 中仍有价值的技术信息——失败原因、审查意见、设计方案与决策上下文——让后来的贡献者不再重复同样的死路。
+PR Tombstone is a GitHub App that turns closed, unmerged pull requests into durable, searchable engineering records.
 
-## 功能特性
+A pull request can be closed without being merged for many reasons: an approach may be technically flawed, superseded, incomplete, rejected during review, or simply no longer aligned with the project. The code may disappear from the active development path, but the reasoning behind it can still be valuable.
 
-- **自动采集**：Webhook 监听未合并关闭的 PR，提取 PR 正文、变更文件、提交、审查、行内评论与时间线事件，生成结构化证据
-- **证据优先分析**：确定性规则引擎 + 可插拔 LLM 分析器（`rules` / `openai` / `openai-compatible` / `anthropic`），无真实证据支撑的结论会被丢弃
-- **历史相似匹配**：PostgreSQL FTS + pgvector 混合检索，新 PR 打开或更新时自动比对历史 Tombstone，相似度 60–80% 提示相关历史，超过 80% 发出警告
-- **决策图谱**：存储 64 维嵌入与类型化关系，可视化仓库的决策脉络
-- **React 仪表盘**：仓库管理、Tombstone 检索与详情、历史回填（backfill）、仓库级设置
-- **数据治理**：全局保留期清理、安装移除级联删除、补丁落库前脱敏
-- **生产就绪**：内嵌事务迁移、作业去重与指数退避重试、Prometheus 指标、结构化请求日志
+PR Tombstone preserves that context as structured **Tombstones** containing evidence, review feedback, decisions, failed approaches, and relationships to later work. When a new pull request resembles previously closed work, the system can surface the relevant history before contributors repeat the same dead end.
 
-## 技术栈
+## Core capabilities
 
-| 层 | 技术 |
+- **Automatic PR archival** — listens for GitHub App webhooks and captures closed, unmerged pull requests together with their description, changed files, commits, reviews, inline comments, conversation comments, and timeline events.
+- **Evidence-backed analysis** — combines deterministic extraction with pluggable analyzers (`rules`, `openai`, `openai-compatible`, and `anthropic`). Claims that cannot be linked to real evidence are discarded.
+- **Historical similarity search** — combines PostgreSQL full-text search with pgvector-backed semantic ranking. Similarity scores below 60% are hidden, 60–80% are treated as related history, and scores above 80% are surfaced as warnings.
+- **Decision graph** — stores 64-dimensional embeddings and typed relations so repositories can build a navigable history of engineering decisions and recurring approaches.
+- **Repository dashboard** — React-based interface for repository management, Tombstone search and inspection, historical backfill, related-history exploration, and repository-level settings.
+- **Data governance** — supports configurable retention, cascade deletion when installation access is removed, and redaction before patches are persisted.
+- **Operational safeguards** — includes transactional embedded migrations, idempotent webhook handling, durable PostgreSQL-backed jobs, exponential retry, structured request logging, health endpoints, and Prometheus metrics.
+
+## How it works
+
+```text
+GitHub App webhook
+        │ HMAC verification + delivery idempotency
+        ▼
+Go API ───────────────── PostgreSQL + pgvector
+  │                              ▲
+  │ enqueue                      │ atomic persistence
+  ▼                              │
+PostgreSQL job queue ─────── Go worker
+                                │
+                                ├─ GitHub installation client
+                                ├─ evidence ranking + analysis
+                                ├─ embeddings + hybrid similarity
+                                └─ decision relations
+
+React dashboard ── nginx ── Go API
+```
+
+The API and worker run as separate processes from the same modular Go codebase. Webhook requests are authenticated before parsing, work is moved to a durable queue, and analysis is performed asynchronously by the worker.
+
+For new or updated pull requests, PR Tombstone compares the current work against historical Tombstones using semantic similarity together with repository-specific signals such as file overlap, path/module overlap, labels, symbols, and approach similarity.
+
+## Technology stack
+
+| Layer | Technology |
 | --- | --- |
-| 后端 | Go 1.26（API Server、队列 Worker、健康检查、Fixture） |
-| 数据 | PostgreSQL 16 + pgvector（内嵌迁移，pgvector 缺失时语义检索自动降级） |
-| 前端 | React 19、Vite 6、TypeScript、TanStack Query |
-| 部署 | Docker Compose、Kubernetes 模板、Vercel（Go Function + Cron Worker） |
+| Backend | Go 1.26 |
+| Database | PostgreSQL 16 + pgvector |
+| Frontend | React 19, TypeScript, Vite 6, TanStack Query |
+| Containers | Docker, Docker Compose, distroless backend image, nginx frontend image |
+| Deployment | Docker Compose, Kubernetes template, Vercel Go Function + Cron |
 
-## 快速开始
+## Quick start
 
-### Docker Compose（推荐）
+### Docker Compose
 
-```powershell
-Copy-Item .env.example .env   # 按需填写 GitHub App 与模型配置
+Create a local environment file and start the stack:
+
+```bash
+cp .env.example .env
 docker compose up -d --build
-go run ./cmd/fixture          # 可选：注入确定性演示数据
 ```
 
-启动后访问：
+Then open:
 
-- 仪表盘：http://localhost:5173
-- 就绪探针：http://localhost:8080/readyz
-- 指标：http://localhost:8080/metrics
+- Dashboard: `http://localhost:5173`
+- Readiness: `http://localhost:8080/readyz`
+- Metrics: `http://localhost:8080/metrics`
 
-Fixture 会创建演示仓库 `fixture-owner/fixture-repository`、Tombstone PR #18331 及配套证据、嵌入与决策关系。停止栈：`docker compose down`。
+Stop the stack with:
 
-### 冒烟验证
-
-```powershell
-./scripts/smoke.ps1
+```bash
+docker compose down
 ```
 
-脚本会构建并启动完整栈、注入 fixture 并校验关键页面与接口。
+The default configuration uses `AI_PROVIDER=rules` and `EMBEDDING_PROVIDER=local`, so the application can run without credentials from an external model provider.
 
-### 源码开发模式
+To connect a real GitHub App, configure the GitHub App credentials and webhook settings described in [docs/GITHUB_APP.md](docs/GITHUB_APP.md).
 
-```powershell
-docker compose up -d postgres        # 仅启动数据库
-go run ./cmd/server                  # 终端 1：API（:8080）
-go run ./cmd/worker                  # 终端 2：队列 Worker
-cd web; npm install; npm run dev     # 终端 3：前端（:5173，代理 /api）
+## Configuration
+
+Configuration is supplied through environment variables. Start with [.env.example](.env.example).
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL/pgvector connection string |
+| `HTTP_ADDR` | API listen address |
+| `GITHUB_APP_ID` | Numeric GitHub App ID |
+| `GITHUB_APP_SLUG` | GitHub App installation-link slug |
+| `GITHUB_PRIVATE_KEY` | GitHub App RSA private key; escaped newlines are supported |
+| `GITHUB_WEBHOOK_SECRET` | Secret used to verify GitHub webhook signatures |
+| `PUBLIC_BASE_URL` | Public dashboard and callback base URL |
+| `DASHBOARD_TOKEN` | Optional Bearer token for dashboard and data endpoints |
+| `AI_PROVIDER` | Analyzer implementation: `rules`, `openai`, `openai-compatible`, or `anthropic` |
+| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | Analyzer provider configuration |
+| `EMBEDDING_PROVIDER` | Embedding implementation: `local` or an OpenAI-compatible endpoint |
+| `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL` | Independent embedding provider configuration |
+| `JOB_POLL_INTERVAL` | Worker queue polling interval |
+| `RETENTION_DAYS` | Global data-retention period |
+| `CRON_SECRET` | Authentication secret for the Vercel Cron worker endpoint |
+| `VERCEL_WORKER_BATCH` | Maximum jobs processed by one Vercel worker invocation |
+| `VERCEL_WORKER_BUDGET` | Processing time budget for a Vercel worker invocation |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | PostgreSQL connection-pool limits |
+
+Analyzer and embedding providers are configured independently so a chat model is not accidentally sent to an embeddings endpoint.
+
+## GitHub App permissions
+
+PR Tombstone is designed around a narrow permission model.
+
+Required repository permissions:
+
+- **Metadata:** read-only
+- **Pull requests:** read-only
+
+Optional capabilities are explicitly feature-gated:
+
+- **Contents:** read-only, when repository context is enabled
+- **Checks:** read and write, when Check-run notifications are enabled
+
+The application does not require Administration, Actions, or source-code write permissions. See [docs/GITHUB_APP.md](docs/GITHUB_APP.md) for the complete setup procedure and webhook subscriptions.
+
+## API overview
+
+Public operational endpoints include:
+
+```text
+GET  /livez
+GET  /readyz
+GET  /api/healthz
+GET  /api/github/install
+GET  /api/github/setup
+POST /api/github/webhook
 ```
 
-默认 `AI_PROVIDER=rules` 与 `EMBEDDING_PROVIDER=local` 完全确定性，无需任何模型厂商凭证即可运行。
+Repository and Tombstone operations include:
 
-## 配置
+```text
+GET      /api/jobs
+GET      /api/repositories
+GET      /api/repositories/{id}/history
+POST     /api/repositories/{id}/backfill
+GET|PUT  /api/repositories/{id}/settings
+GET      /api/tombstones/repository/{repository_id}
+GET      /api/tombstones/{id}
+GET      /api/tombstones/{id}/related
+POST     /api/tombstones/{id}/reanalyze
+PUT      /api/tombstones/{id}/state
+GET      /api/graph/repository/{repository_id}
+GET      /metrics
+```
 
-所有配置来自环境变量，完整示例见 [.env.example](.env.example)。常用项：
+When `DASHBOARD_TOKEN` is configured, dashboard, data, jobs, and metrics endpoints require `Authorization: Bearer <token>`. Health, GitHub install/setup, and webhook endpoints remain public.
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `DATABASE_URL` | 本地 PostgreSQL DSN | PostgreSQL/pgvector 连接串 |
-| `HTTP_ADDR` | `:8080` | API 监听地址 |
-| `GITHUB_APP_ID` / `GITHUB_APP_SLUG` | 空 | GitHub App ID 与安装链接 slug |
-| `GITHUB_PRIVATE_KEY` | 空 | RSA 私钥（支持转义换行） |
-| `GITHUB_WEBHOOK_SECRET` | 空 | Webhook HMAC 密钥 |
-| `DASHBOARD_TOKEN` | 空 | 仪表盘 Bearer 令牌（设置后数据接口需鉴权） |
-| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | 空 | GitHub OAuth App 凭证（两者都设置后启用 OAuth 登录） |
-| `SESSION_TTL` | `336h` | OAuth 会话有效期 |
-| `AI_PROVIDER` | `rules` | 分析器：`rules` / `openai` / `openai-compatible` / `anthropic` |
-| `EMBEDDING_PROVIDER` | `local` | 嵌入：`local` 或 OpenAI 兼容端点 |
-| `JOB_POLL_INTERVAL` | `2s` | Worker 轮询间隔 |
-| `RETENTION_DAYS` | `30` | 全局数据保留天数 |
-| `CRON_SECRET` | 空 | Vercel Cron 鉴权密钥 |
-| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `5` | 连接池上限（Vercel 环境自动降为 `4` / `1`） |
+For request parameters and endpoint semantics, see [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
 
-分析器与嵌入模型相互独立配置，聊天模型不会被误发到嵌入端点。完整配置与 API 语义见 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)。
+## Local development
 
-## API 概览
+Start only PostgreSQL:
 
-公开运维端点：`GET /livez`、`GET /readyz`、`GET /api/healthz`、`GET /api/github/install`、`GET /api/github/setup`、`POST /api/github/webhook`。
+```bash
+docker compose up -d postgres
+```
 
-仪表盘登录端点：`GET /api/auth/login`、`GET /api/auth/callback`、`POST /api/auth/logout`、`GET /api/auth/me`。
+Run the API and worker in separate terminals:
 
-仪表盘与数据端点的鉴权模式由配置决定：配置了 OAuth 凭证时为 **OAuth 会话模式**（HttpOnly Cookie，按用户可见的 GitHub App 安装做仓库级 ACL）；仅配置 `DASHBOARD_TOKEN` 时为 **共享 Bearer 模式**；两者皆空时为开放模式（单用户自托管）。遗留 Bearer 令牌在启用 OAuth 后依然有效，便于自动化脚本平滑迁移。
+```bash
+go run ./cmd/server
+```
 
-- `GET /api/repositories`、`GET /api/repositories/{id}/history`、`POST /api/repositories/{id}/backfill`、`GET|PUT /api/repositories/{id}/settings`
-- `GET /api/tombstones/repository/{id}?q=...`、`GET /api/tombstones/{id}`、`GET /api/tombstones/{id}/related`、`POST /api/tombstones/{id}/reanalyze`、`PUT /api/tombstones/{id}/state`
-- `GET /api/graph/repository/{id}`、`GET /api/jobs`、`GET /metrics`
+```bash
+go run ./cmd/worker
+```
 
-## 部署
+Run the frontend development server:
 
-### Docker Compose / 容器
+```bash
+cd web
+npm install
+npm run dev
+```
 
-根目录 `Dockerfile` 以多阶段构建产出 `server`、`worker`、`healthcheck` 三个二进制（distroless 镜像）；`web/Dockerfile` 产出带安全响应头与 `/api` 反代的 nginx 前端镜像。`docker-compose.yml` 一键编排 postgres + server + worker + web。
+The Vite development server is available on `http://localhost:5173` and proxies API requests to the Go backend.
+
+## Deployment
+
+### Docker Compose
+
+`docker-compose.yml` runs PostgreSQL, the API server, the worker, and the web dashboard as one stack. The backend image contains the `server`, `worker`, and `healthcheck` binaries; the frontend image serves the compiled React application through nginx.
 
 ### Kubernetes
 
-`deploy/kubernetes.yaml` 为可选的生产模板：替换占位符，并搭配带 pgvector 的托管 PostgreSQL 使用。
+[deploy/kubernetes.yaml](deploy/kubernetes.yaml) provides a deployment template intended to be paired with PostgreSQL that has pgvector available. Replace the template placeholders before deployment.
 
-### Vercel（Serverless）
+### Vercel
 
-仓库内置 Vercel 支持：`api/index.go` 以单个 Go Function 承载全部 API，Vercel Cron 按计划调用 `/api/cron/worker` 驱动有界批处理 Worker，`web/` 构建为静态站点。重写规则、函数限制与 Cron 计划见 [vercel.json](vercel.json)，完整部署指南（托管数据库、环境变量、GitHub App 回调、Deployment Protection 注意事项）见 [docs/VERCEL.md](docs/VERCEL.md)。
+The repository also supports a serverless deployment model:
 
-## 本地验证与 CI
+- `api/index.go` serves the API through a Vercel Go Function.
+- `web/` is built as the static frontend.
+- Vercel Cron invokes `/api/cron/worker` for bounded background job processing.
 
-```powershell
-gofmt -w cmd internal api
-go vet ./...
-go test -race ./...
-Push-Location web; npm ci; npm run build; Pop-Location
-docker compose config
-```
+See [docs/VERCEL.md](docs/VERCEL.md) for database requirements, environment variables, routing, GitHub App callbacks, and deployment-specific considerations.
 
-GitHub Actions（`.github/workflows/ci.yml`）在每次 push / PR 执行同样的检查：后端 gofmt + vet + race 测试、前端 `npm ci` + 构建、两个容器镜像构建。
+## Security and data handling
 
-## 项目结构
+PR Tombstone separates GitHub access from analysis responsibilities. The analyzer receives structured, untrusted evidence and does not receive GitHub credentials.
+
+Webhook signatures are verified over the raw request body before JSON parsing, GitHub delivery IDs are deduplicated, and installation tokens are kept in memory. Full patches are redacted before persistence. Repository access removal triggers the corresponding data cleanup path, and retention is controlled through `RETENTION_DAYS`.
+
+Additional policy documents are available under `docs/`:
+
+- [Security model](docs/SECURITY.md)
+- [Privacy policy](docs/PRIVACY.md)
+- [Retention policy](docs/RETENTION.md)
+- [Deletion policy](docs/DELETION.md)
+
+## Continuous integration
+
+GitHub Actions runs the repository's backend, frontend, and container checks on pushes and pull requests:
+
+- Go formatting verification
+- `go vet ./...`
+- `go test -race ./...`
+- frontend dependency installation and production build
+- backend and frontend container builds
+
+The workflow is defined in [.github/workflows/ci.yml](.github/workflows/ci.yml).
+
+## Project structure
 
 ```text
 .
-├── api/                 # Vercel Go Function 入口（API + Cron Worker 路由）
+├── api/                 # Vercel Go Function entry point
 ├── cmd/
-│   ├── server/          # API 服务（本地/容器主入口）
-│   ├── worker/          # 队列 Worker（长轮询）
-│   ├── healthcheck/     # 容器健康检查二进制
-│   └── fixture/         # 确定性演示数据注入
+│   ├── server/          # API server
+│   ├── worker/          # Queue worker
+│   └── healthcheck/     # Container health-check binary
 ├── internal/
-│   ├── analyzer/        # 分析器抽象与实现（rules / LLM）
-│   ├── confidence/      # 平台置信度评分
-│   ├── config/          # 环境变量配置
-│   ├── embedding/       # 嵌入抽象（local / OpenAI 兼容）
-│   ├── evidence/        # 证据排序
-│   ├── github/          # GitHub App 认证与 REST 客户端
-│   ├── httpapi/         # HTTP API 与中间件
-│   ├── ingest/          # 采集与分析流水线
-│   ├── jobs/            # 作业队列 Worker（含 RunBatch 批处理）
-│   ├── model/           # 领域模型
-│   ├── observability/   # Prometheus 指标
-│   ├── repository/      # PostgreSQL 存储与内嵌迁移
-│   ├── similarity/      # 历史相似度评分
-│   ├── version/         # 版本信息
-│   └── webhook/         # Webhook HMAC 校验
-├── web/                 # React + Vite 仪表盘
-├── docs/                # 实施、部署与策略文档
-├── deploy/              # Kubernetes 模板
-├── fixtures/            # Webhook fixture 数据
-├── scripts/             # 冒烟脚本（smoke.ps1）
-├── Dockerfile           # 后端多阶段镜像
-├── docker-compose.yml   # 本地/单机完整编排
-└── vercel.json          # Vercel 构建、重写与 Cron 配置
+│   ├── analyzer/        # Analysis abstraction and providers
+│   ├── confidence/      # Platform confidence scoring
+│   ├── config/          # Environment configuration
+│   ├── embedding/       # Embedding abstraction and providers
+│   ├── evidence/        # Evidence ranking
+│   ├── github/          # GitHub App authentication and REST client
+│   ├── httpapi/         # HTTP API and middleware
+│   ├── ingest/          # Ingestion and analysis pipeline
+│   ├── jobs/            # PostgreSQL-backed job processing
+│   ├── model/           # Domain models
+│   ├── observability/   # Metrics and operational instrumentation
+│   ├── repository/      # PostgreSQL persistence and migrations
+│   ├── similarity/      # Historical similarity scoring
+│   ├── version/         # Version metadata
+│   └── webhook/         # Webhook signature verification
+├── web/                 # React + Vite dashboard
+├── docs/                # Architecture, deployment, security, and policy docs
+├── deploy/              # Kubernetes deployment template
+├── fixtures/            # GitHub webhook fixture data
+├── Dockerfile           # Backend multi-stage image
+├── docker-compose.yml   # Local and single-host stack
+└── vercel.json          # Vercel build, routing, function, and Cron config
 ```
 
-## 文档索引
+## Documentation
 
-| 文档 | 内容 |
+| Document | Description |
 | --- | --- |
-| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | 运行、配置、API、分析与运维细节 |
-| [docs/VERCEL.md](docs/VERCEL.md) | Vercel Serverless 部署指南 |
-| [docs/GITHUB_APP.md](docs/GITHUB_APP.md) | GitHub App 创建与权限配置 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构总览 |
-| [docs/PRIVACY.md](docs/PRIVACY.md) / [docs/RETENTION.md](docs/RETENTION.md) / [docs/DELETION.md](docs/DELETION.md) | 隐私、保留与删除策略 |
-| [docs/SECURITY.md](docs/SECURITY.md) | 安全模型与威胁分析 |
+| [Implementation](docs/IMPLEMENTATION.md) | Runtime behavior, configuration, API semantics, analysis, search, and operations |
+| [Architecture](docs/ARCHITECTURE.md) | System architecture and process boundaries |
+| [GitHub App configuration](docs/GITHUB_APP.md) | App setup, permissions, webhook subscriptions, and runtime values |
+| [Vercel deployment](docs/VERCEL.md) | Serverless deployment guide |
+| [Security](docs/SECURITY.md) | Security model and threat analysis |
+| [Privacy](docs/PRIVACY.md) | Privacy policy |
+| [Retention](docs/RETENTION.md) | Data-retention behavior |
+| [Deletion](docs/DELETION.md) | Data-deletion behavior |
