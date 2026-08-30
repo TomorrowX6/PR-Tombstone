@@ -1,0 +1,12 @@
+{
+  "action": "closed",
+  "installation": { "id": 123456 },
+  "repository": {
+    "id": 987654,
+    "name": "fixture-repository",
+    "full_name": "fixture-owner/fixture-repository",
+    "private": false,
+    "owner": { "login": "fixture-owner" }
+  },
+  "pull_request": { "number": 18331, "merged": false }
+}
