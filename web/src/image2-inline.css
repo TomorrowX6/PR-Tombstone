@@ -57,6 +57,48 @@
   font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Normalize dashboard metric icons by separating the fixed circular plate
+   from the SVG artwork. The source SVGs have different internal whitespace,
+   so equal CSS background sizes do not look optically equal. */
+.stat-icon {
+  position: relative;
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px;
+  flex: 0 0 56px !important;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background-image: none !important;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.stat-icon::before {
+  content: '';
+  display: block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+.stat-card.purple .stat-icon { background-image: none !important; }
+.stat-card.blue .stat-icon { background-image: none !important; }
+.stat-card.cyan .stat-icon { background-image: none !important; }
+.stat-card.purple .stat-icon::before {
+  width: 31px;
+  height: 31px;
+  background-image: var(--i2-tomb);
+}
+.stat-card.blue .stat-icon::before {
+  width: 28px;
+  height: 28px;
+  background-image: var(--i2-shield);
+}
+.stat-card.cyan .stat-icon::before {
+  width: 27px;
+  height: 27px;
+  background-image: var(--i2-question);
+}
+
 @media (max-width: 900px) {
   .hero { min-height: 150px; padding-right: 22px; }
   .hero::before { opacity: .18; right: -40px; }
