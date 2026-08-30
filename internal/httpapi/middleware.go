@@ -55,6 +55,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		}
 		if s.Config.OAuthEnabled() {
 			user, installations, err := s.resolveSession(r)
+			if errors.Is(err, repository.ErrACLSnapshotExpired) {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="PR Tombstone"`)
+				http.Error(w, "dashboard authorization is stale; sign in again to refresh GitHub installation access", http.StatusUnauthorized)
+				return
+			}
 			if err != nil {
 				s.Logger.Warn("resolve dashboard session", "error", err)
 			}
@@ -100,7 +105,7 @@ func (s *Server) resolveSession(r *http.Request) (*model.DashboardUser, []int64,
 	if err != nil {
 		return nil, nil, err
 	}
-	installations, err := s.Store.UserInstallations(r.Context(), user.ID)
+	installations, err := s.Store.UserInstallations(r.Context(), user.ID, s.Config.OAuthACLTTL)
 	if err != nil {
 		return nil, nil, err
 	}
