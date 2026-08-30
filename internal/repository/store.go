@@ -262,9 +262,13 @@ func (s *Store) ClaimMaintenance(ctx context.Context, name string, interval time
 	return claimed, err
 }
 
-func (s *Store) JobStats(ctx context.Context) (JobStats, error) {
+// JobStats returns queue counters. Pass a non-nil installation filter to
+// scope the counters to the caller's accessible installations (OAuth ACL);
+// nil reports the global totals used by self-host modes and Prometheus.
+func (s *Store) JobStats(ctx context.Context, onlyInstallations []int64) (JobStats, error) {
 	var stats JobStats
-	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FILTER (WHERE status='pending'),COUNT(*) FILTER (WHERE status='running'),COUNT(*) FILTER (WHERE status='completed'),COUNT(*) FILTER (WHERE status='failed') FROM analysis_jobs`).Scan(&stats.Pending, &stats.Running, &stats.Completed, &stats.Failed)
+	filter, args := jobInstallationFilter(onlyInstallations)
+	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FILTER (WHERE status='pending'),COUNT(*) FILTER (WHERE status='running'),COUNT(*) FILTER (WHERE status='completed'),COUNT(*) FILTER (WHERE status='failed') FROM analysis_jobs WHERE TRUE`+filter, args...).Scan(&stats.Pending, &stats.Running, &stats.Completed, &stats.Failed)
 	return stats, err
 }
 
@@ -495,8 +499,9 @@ func (s *Store) SetTombstoneStateByID(ctx context.Context, id int64, state model
 	return nil
 }
 
-func (s *Store) ListRepositories(ctx context.Context) ([]model.Repository, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT repository.id,repository.github_id,repository.installation_id,repository.owner,repository.name,repository.private,COUNT(tombstone.id),COUNT(tombstone.id) FILTER (WHERE tombstone.confidence>=0.75),COUNT(tombstone.id) FILTER (WHERE tombstone.result->'outcomes' @> '["unknown"]'::jsonb) FROM repositories repository LEFT JOIN tombstones tombstone ON tombstone.repository_id=repository.id GROUP BY repository.id ORDER BY repository.owner,repository.name`)
+func (s *Store) ListRepositories(ctx context.Context, onlyInstallations []int64) ([]model.Repository, error) {
+	filter, args := repositoryInstallationFilter(onlyInstallations)
+	rows, err := s.DB.QueryContext(ctx, `SELECT repository.id,repository.github_id,repository.installation_id,repository.owner,repository.name,repository.private,COUNT(tombstone.id),COUNT(tombstone.id) FILTER (WHERE tombstone.confidence>=0.75),COUNT(tombstone.id) FILTER (WHERE tombstone.result->'outcomes' @> '["unknown"]'::jsonb) FROM repositories repository LEFT JOIN tombstones tombstone ON tombstone.repository_id=repository.id WHERE TRUE`+filter+` GROUP BY repository.id ORDER BY repository.owner,repository.name`, args...)
 	if err != nil {
 		return nil, err
 	}

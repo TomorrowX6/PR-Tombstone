@@ -72,6 +72,8 @@ cd web; npm install; npm run dev     # 终端 3：前端（:5173，代理 /api�
 | `GITHUB_PRIVATE_KEY` | 空 | RSA 私钥（支持转义换行） |
 | `GITHUB_WEBHOOK_SECRET` | 空 | Webhook HMAC 密钥 |
 | `DASHBOARD_TOKEN` | 空 | 仪表盘 Bearer 令牌（设置后数据接口需鉴权） |
+| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | 空 | GitHub OAuth App 凭证（两者都设置后启用 OAuth 登录） |
+| `SESSION_TTL` | `336h` | OAuth 会话有效期 |
 | `AI_PROVIDER` | `rules` | 分析器：`rules` / `openai` / `openai-compatible` / `anthropic` |
 | `EMBEDDING_PROVIDER` | `local` | 嵌入：`local` 或 OpenAI 兼容端点 |
 | `JOB_POLL_INTERVAL` | `2s` | Worker 轮询间隔 |
@@ -85,7 +87,9 @@ cd web; npm install; npm run dev     # 终端 3：前端（:5173，代理 /api�
 
 公开运维端点：`GET /livez`、`GET /readyz`、`GET /api/healthz`、`GET /api/github/install`、`GET /api/github/setup`、`POST /api/github/webhook`。
 
-仪表盘与数据端点（设置 `DASHBOARD_TOKEN` 后需 `Authorization: Bearer`）：
+仪表盘登录端点：`GET /api/auth/login`、`GET /api/auth/callback`、`POST /api/auth/logout`、`GET /api/auth/me`。
+
+仪表盘与数据端点的鉴权模式由配置决定：配置了 OAuth 凭证时为 **OAuth 会话模式**（HttpOnly Cookie，按用户可见的 GitHub App 安装做仓库级 ACL）；仅配置 `DASHBOARD_TOKEN` 时为 **共享 Bearer 模式**；两者皆空时为开放模式（单用户自托管）。遗留 Bearer 令牌在启用 OAuth 后依然有效，便于自动化脚本平滑迁移。
 
 - `GET /api/repositories`、`GET /api/repositories/{id}/history`、`POST /api/repositories/{id}/backfill`、`GET|PUT /api/repositories/{id}/settings`
 - `GET /api/tombstones/repository/{id}?q=...`、`GET /api/tombstones/{id}`、`GET /api/tombstones/{id}/related`、`POST /api/tombstones/{id}/reanalyze`、`PUT /api/tombstones/{id}/state`

@@ -25,6 +25,12 @@ h3 { font-size: 16px; line-height: 1.35; margin: 12px 0 7px; }
 .token-box input, .section-head input, select { background: #111a31; border: 1px solid #334263; color: #fff; padding: 10px 12px; outline: none; }
 .token-box input { width: 210px; border-radius: 8px 0 0 8px; }
 .token-box button { color: #dfe6ff; background: #25345e; border: 1px solid #536cae; border-left: 0; border-radius: 0 8px 8px 0; }
+.signin { color: #dfe6ff; background: #25345e; border: 1px solid #536cae; border-radius: 8px; padding: 9px 14px; text-decoration: none; font-size: 12px; }
+.signin:hover { background: #2e406e; }
+.account { display: flex; align-items: center; gap: 8px; color: #c3cdec; font-size: 12px; }
+.account img { width: 24px; height: 24px; border-radius: 50%; }
+.account button { color: #aebbe2; background: none; border: 1px solid #405077; border-radius: 8px; padding: 6px 10px; font-size: 11px; }
+.account button:hover { background: #1c2641; }
 main { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 38px; padding-top: 30px; }
 aside { border-right: 1px solid #2b3553; padding-right: 24px; min-height: 700px; }
 .repo { display: flex; width: 100%; flex-direction: column; text-align: left; color: #b9c3df; background: none; border: 0; border-radius: 10px; padding: 12px; margin: 2px 0; overflow-wrap: anywhere; }
