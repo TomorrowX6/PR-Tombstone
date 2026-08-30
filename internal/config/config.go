@@ -24,6 +24,7 @@ type Config struct {
 	OAuthClientID      string
 	OAuthClientSecret  string
 	SessionTTL         time.Duration
+	OAuthACLTTL        time.Duration
 	AIProvider         string
 	AIBaseURL          string
 	AIAPIKey           string
@@ -61,6 +62,7 @@ func Load() Config {
 		OAuthClientID:      os.Getenv("GITHUB_OAUTH_CLIENT_ID"),
 		OAuthClientSecret:  os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"),
 		SessionTTL:         durationEnv("SESSION_TTL", 14*24*time.Hour),
+		OAuthACLTTL:        durationEnv("OAUTH_ACL_TTL", time.Hour),
 		AIProvider:         env("AI_PROVIDER", "rules"),
 		AIBaseURL:          env("AI_BASE_URL", ""),
 		AIAPIKey:           os.Getenv("AI_API_KEY"),
